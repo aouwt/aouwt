@@ -1,18 +1,17 @@
 $CONSOLE:ONLY
 _DEST _CONSOLE
 
-PRINT "HTML Linker v1"
-PRINT "--------------"
 IF COMMAND$(1) = "" THEN
+    PRINT "HTML Linker v1"
+    PRINT "--------------"
     PRINT "USAGE: link <input file> [<output file>]"
     SYSTEM
 END IF
-PRINT "Using file "; COMMAND$(1)
+
 o$ = linker$(LoadFile(COMMAND$(1)))
 IF COMMAND$(2) = "" THEN
     PRINT o$;
 ELSE
-    PRINT "Outputting to "; COMMAND$(2)
     f% = FREEFILE
     OPEN COMMAND$(2) FOR OUTPUT AS #f%
     PRINT #f%, o$;
@@ -23,9 +22,13 @@ SYSTEM
 
 
 FUNCTION linker$ (f AS STRING)
-    CONST LinkBegin = "<!--<LINKER>"
-    CONST LinkEnd = "</LINKER>-->"
-    DIM vars(100) AS STRING
+    CONST LinkBegin = "<!--LINKER:"
+    CONST LinkEnd = "-->"
+    TYPE var
+        v AS STRING
+        n AS STRING
+    END TYPE
+    DIM vars(100) AS var
     DO
         lstart = INSTR(f, LinkBegin)
         lend = INSTR(f, LinkEnd)
@@ -42,23 +45,37 @@ FUNCTION linker$ (f AS STRING)
                 o$ = LoadFile(arg$)
 
             CASE "SET"
-                vars(nextvar%) = arg$
+                vars(nextvar%).n = arg$
+                vars(nextvar%).v = "TRUE"
                 nextvar% = nextvar% + 1
 
             CASE "IF"
-                sep% = INSTR(arg$, ":")
+                sep% = INSTR(arg$, ";")
                 act$ = MID$(arg$, sep% + 1)
                 arg$ = LEFT$(arg$, sep% - 1)
                 FOR i% = 0 TO nextvar%
-                    IF vars(i%) = arg$ THEN o$ = act$: EXIT FOR
+                    IF vars(i%).n = arg$ THEN o$ = act$: EXIT FOR
                 NEXT
 
             CASE "IFN"
-                sep% = INSTR(arg$, ":")
+                sep% = INSTR(arg$, ";")
                 o$ = MID$(arg$, sep% + 1)
                 act$ = LEFT$(arg$, sep% - 1)
                 FOR i% = 0 TO nextvar%
-                    IF vars(i%) = act$ THEN o$ = "": EXIT FOR
+                    IF vars(i%).n = act$ THEN o$ = "": EXIT FOR
+                NEXT
+
+            CASE "STR"
+                sep% = INSTR(arg$, "=")
+                act$ = MID$(arg$, sep% + 1)
+                arg$ = LEFT$(arg$, sep% - 1)
+                vars(nextvar%).n = arg$
+                vars(nextvar%).v = act$
+                nextvar% = nextvar% + 1
+
+            CASE "PUT"
+                FOR i% = 0 TO nextvar%
+                    IF vars(i%).n = arg$ THEN o$ = vars(i%).v: EXIT FOR
                 NEXT
 
             CASE ELSE
@@ -72,7 +89,7 @@ END FUNCTION
 
 FUNCTION LoadFile$ (file$)
     IF _FILEEXISTS(file$) = 0 THEN
-        PRINT USING "Error! File & does not exist!"; file$
+        PRINT "Error: cannot find file "; file$
         EXIT FUNCTION
     END IF
     DIM f AS INTEGER
